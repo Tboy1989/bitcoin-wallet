@@ -173,3 +173,7 @@ When sweeping wallets, Bitcoin Wallet uses a set of Electrum servers to query fo
 outputs (UTXOs). This feature can be disabled with the compile-time flag:
 
     Constants.ENABLE_SWEEP_WALLET
+
+For scripted input of a private key on a connected Android device, use:
+
+    ./wallet/sweep-key.sh <private-key-wif-or-bip38> [--testnet]
