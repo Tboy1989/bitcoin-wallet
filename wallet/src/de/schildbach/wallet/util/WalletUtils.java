@@ -29,12 +29,17 @@ import com.google.common.base.Stopwatch;
 import de.schildbach.wallet.Constants;
 import de.schildbach.wallet.service.BlockchainService;
 import org.bitcoinj.core.Address;
+import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.ECKey;
+import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.SegwitAddress;
 import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.script.Script;
+import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.script.ScriptException;
 import org.bitcoinj.wallet.Protos;
 import org.bitcoinj.wallet.UnreadableWalletException;
@@ -46,6 +51,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Andreas Schildbach
@@ -222,6 +229,49 @@ public class WalletUtils {
 
     public static boolean isPayToManyTransaction(final Transaction transaction) {
         return transaction.getOutputs().size() > 20;
+    }
+
+    public static Coin getBalance(final Wallet wallet, final ECKey key) {
+        Coin balance = Coin.ZERO;
+
+        for (final Transaction transaction : wallet.getTransactions(false)) {
+            for (final TransactionOutput output : transaction.getOutputs()) {
+                if (output.isAvailableForSpending() && isOutputForKey(output, key))
+                    balance = balance.add(output.getValue());
+            }
+        }
+
+        return balance;
+    }
+
+    public static List<ECKey> getImportedKeysWithBalance(final Wallet wallet) {
+        final List<ECKey> keysWithBalance = new ArrayList<>();
+
+        for (final ECKey key : wallet.getImportedKeys()) {
+            if (getBalance(wallet, key).signum() > 0)
+                keysWithBalance.add(key);
+        }
+
+        return keysWithBalance;
+    }
+
+    public static boolean hasImportedKeysWithBalance(final Wallet wallet) {
+        for (final ECKey key : wallet.getImportedKeys()) {
+            if (getBalance(wallet, key).signum() > 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static boolean isOutputForKey(final TransactionOutput output, final ECKey key) {
+        final Script script = output.getScriptPubKey();
+        if (script.equals(ScriptBuilder.createP2PKHOutputScript(
+                LegacyAddress.fromKey(Constants.NETWORK_PARAMETERS, key).getHash())))
+            return true;
+
+        return key.isCompressed() && script.equals(ScriptBuilder.createP2WPKHOutputScript(
+                SegwitAddress.fromKey(Constants.NETWORK_PARAMETERS, key).getHash()));
     }
 
     public static @Nullable String uriToProvider(final Uri uri) {
